@@ -7,6 +7,7 @@ interface HeaderProps {
   onModeChange: (mode: GameMode) => void;
   onStatsOpen: () => void;
   onHowToPlayOpen: () => void;
+  onHomeClick: () => void;
 }
 
 /**
@@ -17,22 +18,28 @@ const Header: React.FC<HeaderProps> = ({
   onModeChange,
   onStatsOpen,
   onHowToPlayOpen,
+  onHomeClick,
 }) => {
   return (
     <header className="w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50 sticky top-0 z-40">
       <div className="max-w-xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
         {/* Logo */}
-        <div className="flex items-center gap-2 min-w-0">
+        <button
+          type="button"
+          onClick={onHomeClick}
+          className="flex items-center gap-2 min-w-0 rounded-xl -ml-2 px-2 py-1.5 hover:bg-slate-800/80 transition-colors text-left"
+          aria-label="Go to Emoji Groups Daily puzzle"
+        >
           <span className="text-2xl" aria-hidden="true">🧩</span>
-          <div className="leading-tight min-w-0">
+          <span className="leading-tight min-w-0">
             <span className="text-white font-bold text-sm sm:text-base whitespace-nowrap">
               Emoji Groups
             </span>
             <span className="text-teal-400 font-bold text-sm sm:text-base ml-1">
               Daily
             </span>
-          </div>
-        </div>
+          </span>
+        </button>
 
         {/* Mode switcher */}
         <nav

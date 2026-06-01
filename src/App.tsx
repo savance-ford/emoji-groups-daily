@@ -5,9 +5,11 @@ import GameModal from './components/GameModal';
 import StatsModal from './components/StatsModal';
 import HowToPlayModal from './components/HowToPlayModal';
 import Confetti from './components/Confetti';
-import Footer from './components/Footer';
 import { GameMode, GameState, PlayerStats, SolvedGroup } from './types';
 import { getDailyPuzzle, getRandomPuzzle } from './puzzleData';
+import Footer from './components/Footer';
+import LegalPage, { LegalPageType } from './components/LegalPage';
+import { SITE_CONFIG } from './config';
 import {
   buildTiles,
   checkGuess,
@@ -39,6 +41,59 @@ function buildInitialState(mode: GameMode): GameState {
   };
 }
 
+type AppPage = 'game' | LegalPageType;
+
+const pageMeta: Record<AppPage, { title: string; description: string }> = {
+  game: {
+    title: `${SITE_CONFIG.siteName} — Daily Emoji Puzzle Game`,
+    description:
+      'Play Emoji Groups Daily, a free daily emoji grouping puzzle. Find four hidden groups of four emojis before you run out of mistakes.',
+  },
+  privacy: {
+    title: `Privacy Policy — ${SITE_CONFIG.siteName}`,
+    description:
+      `Read the ${SITE_CONFIG.siteName} Privacy Policy, including details about local storage, cookies, analytics, ads, and third-party services.`,
+  },
+  terms: {
+    title: `Terms of Use — ${SITE_CONFIG.siteName}`,
+    description:
+      `Read the ${SITE_CONFIG.siteName} Terms of Use for using the daily emoji puzzle website.`,
+  },
+  disclaimer: {
+    title: `Disclaimer — ${SITE_CONFIG.siteName}`,
+    description:
+      `Read the ${SITE_CONFIG.siteName} disclaimer for puzzle accuracy, saved stats, third-party content, ads, and independent status.`,
+  },
+};
+
+function getPageFromHash(): AppPage {
+  const normalizedHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+
+  if (
+    normalizedHash === 'privacy' ||
+    normalizedHash === 'terms' ||
+    normalizedHash === 'disclaimer'
+  ) {
+    return normalizedHash;
+  }
+
+  return 'game';
+}
+
+function updateMetaDescription(description: string): void {
+  let descriptionTag = document.querySelector<HTMLMetaElement>(
+    'meta[name="description"]'
+  );
+
+  if (!descriptionTag) {
+    descriptionTag = document.createElement('meta');
+    descriptionTag.name = 'description';
+    document.head.appendChild(descriptionTag);
+  }
+
+  descriptionTag.content = description;
+}
+
 function App() {
   const [gameState, setGameState] = useState<GameState>(() =>
     buildInitialState('daily')
@@ -48,6 +103,47 @@ function App() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromHash());
+
+  /** Keep the app route in sync when the user uses browser back/forward. */
+useEffect(() => {
+  const syncPageFromUrl = () => {
+    setCurrentPage(getPageFromHash());
+    window.scrollTo({ top: 0 });
+  };
+
+  window.addEventListener('hashchange', syncPageFromUrl);
+  window.addEventListener('popstate', syncPageFromUrl);
+
+  return () => {
+    window.removeEventListener('hashchange', syncPageFromUrl);
+    window.removeEventListener('popstate', syncPageFromUrl);
+  };
+}, []);
+
+/** Update browser title and description for the game and legal pages. */
+useEffect(() => {
+  const meta = pageMeta[currentPage];
+  document.title = meta.title;
+  updateMetaDescription(meta.description);
+}, [currentPage]);
+
+/** Navigate between the puzzle and static legal pages without adding a router dependency. */
+const navigateToPage = useCallback((page: AppPage) => {
+  setShowStats(false);
+  setShowHowToPlay(false);
+  setShowModal(false);
+  setShowConfetti(false);
+  setCurrentPage(page);
+  window.scrollTo({ top: 0 });
+
+  const nextUrl =
+    page === 'game'
+      ? `${window.location.pathname}${window.location.search}`
+      : `/${page}`;
+
+  window.history.pushState(null, '', nextUrl);
+}, []);
 
   // Show the end-of-game modal shortly after the game ends.
   useEffect(() => {
@@ -76,7 +172,7 @@ function App() {
   /** Handle a tile click: select/deselect, capped at 4. */
   const handleTileClick = useCallback((tileId: string) => {
     setGameState((prev) => {
-      if (prev.status !== 'playing') return prev;
+      if (prev.status !== 'playing' || prev.shakingTileIds.length > 0) return prev;
 
       const alreadySelected = prev.selectedTileIds.includes(tileId);
       if (alreadySelected) {
@@ -101,7 +197,12 @@ function App() {
   const handleSubmit = useCallback(() => {
     setGameState((current) => {
       const { puzzle, selectedTileIds, solvedGroups, mistakes, startTime, mode } = current;
-      if (!puzzle || current.status !== 'playing' || selectedTileIds.length !== 4) {
+      if (
+        !puzzle ||
+        current.status !== 'playing' ||
+        current.shakingTileIds.length > 0 ||
+        selectedTileIds.length !== 4
+      ) {
         return current;
       }
 
@@ -174,12 +275,32 @@ function App() {
         saveStats(updatedStats);
       }
 
+      const puzzleId = puzzle.id;
+      const gameStartedAt = startTime;
+      const submittedMode = mode;
+      const submittedTileIds = [...selectedTileIds];
+
       window.setTimeout(() => {
-        setGameState((prev) => ({
-          ...prev,
-          shakingTileIds: [],
-          selectedTileIds: [],
-        }));
+        setGameState((prev) => {
+          const sameGuessContext =
+            prev.puzzle?.id === puzzleId &&
+            prev.mode === submittedMode &&
+            prev.startTime === gameStartedAt;
+
+          return {
+            ...prev,
+            shakingTileIds:
+              sameGuessContext &&
+              submittedTileIds.every((id) => prev.shakingTileIds.includes(id))
+                ? []
+                : prev.shakingTileIds,
+            selectedTileIds:
+              sameGuessContext &&
+              submittedTileIds.every((id) => prev.selectedTileIds.includes(id))
+                ? []
+                : prev.selectedTileIds,
+          };
+        });
       }, 520);
 
       return {
@@ -196,7 +317,7 @@ function App() {
   /** Shuffle the remaining tiles. */
   const handleShuffle = useCallback(() => {
     setGameState((prev) => {
-      if (prev.status !== 'playing') return prev;
+      if (prev.status !== 'playing' || prev.shakingTileIds.length > 0) return prev;
       return {
         ...prev,
         remainingTiles: shuffleArray(prev.remainingTiles),
@@ -208,7 +329,7 @@ function App() {
   /** Clear selection. */
   const handleDeselect = useCallback(() => {
     setGameState((prev) => {
-      if (prev.status !== 'playing') return prev;
+      if (prev.status !== 'playing' || prev.shakingTileIds.length > 0) return prev;
       return {
         ...prev,
         selectedTileIds: [],
@@ -247,6 +368,7 @@ function App() {
         onModeChange={handleModeChange}
         onStatsOpen={() => setShowStats(true)}
         onHowToPlayOpen={() => setShowHowToPlay(true)}
+        onHomeClick={() => navigateToPage('game')}
       />
 
       {/* ── Ad placeholder: Below header banner ────────────────────────── */}
@@ -256,35 +378,38 @@ function App() {
             </div>
           </div> */}
 
-      <main className="flex-1 flex flex-col pb-4" id="main-content">
-        {puzzle && (
-          <GameBoard
-            tiles={remainingTiles}
-            selectedTileIds={selectedTileIds}
-            shakingTileIds={shakingTileIds}
-            solvedGroups={solvedGroups}
-            mistakes={mistakes}
-            maxMistakes={MAX_MISTAKES}
-            oneAwayHint={oneAwayHint}
-            puzzleTitle={puzzle.title}
-            mode={mode}
-            isPlaying={status === 'playing'}
-            onTileClick={handleTileClick}
-            onSubmit={handleSubmit}
-            onShuffle={handleShuffle}
-            onDeselect={handleDeselect}
-          />
-        )}
+      {currentPage === 'game' ? (
+  <>
+    <main className="flex-1 flex flex-col pb-4" id="main-content">
+      {puzzle && (
+        <GameBoard
+          tiles={remainingTiles}
+          selectedTileIds={selectedTileIds}
+          shakingTileIds={shakingTileIds}
+          solvedGroups={solvedGroups}
+          mistakes={mistakes}
+          maxMistakes={MAX_MISTAKES}
+          oneAwayHint={oneAwayHint}
+          puzzleTitle={puzzle.title}
+          mode={mode}
+          isPlaying={status === 'playing' && shakingTileIds.length === 0}
+          onTileClick={handleTileClick}
+          onSubmit={handleSubmit}
+          onShuffle={handleShuffle}
+          onDeselect={handleDeselect}
+        />
+      )}
+    </main>
+  </>
+) : (
+  <LegalPage page={currentPage} onBackHome={() => navigateToPage('game')} />
+)}
 
-        {/* ── Ad placeholder: Below puzzle ───────────────────────────── */}
-        {/* <div id="ad-below-puzzle" className="w-full max-w-xl mx-auto px-4 pt-3">
-              <div className="bg-slate-800/50 rounded-xl h-28 flex items-center justify-center text-slate-600 text-xs border border-slate-700">
-                Ad Slot: Rectangle 300x250
-              </div>
-            </div> */}
-      </main>
-
-      <Footer />
+      <Footer
+  onNavigateHome={() => navigateToPage('game')}
+  onNavigateLegal={navigateToPage}
+  showSeoCopy={currentPage === 'game'}
+/>
 
       {showConfetti && <Confetti />}
 
