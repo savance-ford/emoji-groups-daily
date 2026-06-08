@@ -8,6 +8,6 @@
 export const SITE_CONFIG = {
   siteName: 'Emoji Groups Daily',
   siteUrl: 'https://emojigroups.com',
-  contactEmail: 'hello@emojigroupsdaily.com',
+  contactEmail: 'hello@emojigroups.com',
   lastUpdated: 'May 28, 2026',
 };
