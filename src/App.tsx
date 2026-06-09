@@ -66,15 +66,17 @@ const pageMeta: Record<AppPage, { title: string; description: string }> = {
   },
 };
 
-function getPageFromHash(): AppPage {
+function getPageFromUrl(): AppPage {
   const normalizedHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  const normalizedPath = window.location.pathname.replace(/^\/|\/$/g, '').toLowerCase();
+  const route = normalizedHash || normalizedPath;
 
   if (
-    normalizedHash === 'privacy' ||
-    normalizedHash === 'terms' ||
-    normalizedHash === 'disclaimer'
+    route === 'privacy' ||
+    route === 'terms' ||
+    route === 'disclaimer'
   ) {
-    return normalizedHash;
+    return route;
   }
 
   return 'game';
@@ -103,12 +105,12 @@ function App() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromHash());
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromUrl());
 
   /** Keep the app route in sync when the user uses browser back/forward. */
 useEffect(() => {
   const syncPageFromUrl = () => {
-    setCurrentPage(getPageFromHash());
+    setCurrentPage(getPageFromUrl());
     window.scrollTo({ top: 0 });
   };
 
