@@ -96,6 +96,20 @@ function updateMetaDescription(description: string): void {
   descriptionTag.content = description;
 }
 
+function updateCanonicalLink(path: string): void {
+  let canonicalTag = document.querySelector<HTMLLinkElement>(
+    'link[rel="canonical"]'
+  );
+
+  if (!canonicalTag) {
+    canonicalTag = document.createElement('link');
+    canonicalTag.rel = 'canonical';
+    document.head.appendChild(canonicalTag);
+  }
+
+  canonicalTag.href = `${SITE_CONFIG.siteUrl}${path}`;
+}
+
 function App() {
   const [gameState, setGameState] = useState<GameState>(() =>
     buildInitialState('daily')
@@ -128,6 +142,7 @@ useEffect(() => {
   const meta = pageMeta[currentPage];
   document.title = meta.title;
   updateMetaDescription(meta.description);
+  updateCanonicalLink(currentPage === 'game' ? '/' : `/${currentPage}`);
 }, [currentPage]);
 
 /** Navigate between the puzzle and static legal pages without adding a router dependency. */
@@ -141,7 +156,7 @@ const navigateToPage = useCallback((page: AppPage) => {
 
   const nextUrl =
     page === 'game'
-      ? `${window.location.pathname}${window.location.search}`
+      ? `/${window.location.search}`
       : `/${page}`;
 
   window.history.pushState(null, '', nextUrl);
