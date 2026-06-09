@@ -66,15 +66,17 @@ const pageMeta: Record<AppPage, { title: string; description: string }> = {
   },
 };
 
-function getPageFromHash(): AppPage {
+function getPageFromUrl(): AppPage {
   const normalizedHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  const normalizedPath = window.location.pathname.replace(/^\/|\/$/g, '').toLowerCase();
+  const route = normalizedHash || normalizedPath;
 
   if (
-    normalizedHash === 'privacy' ||
-    normalizedHash === 'terms' ||
-    normalizedHash === 'disclaimer'
+    route === 'privacy' ||
+    route === 'terms' ||
+    route === 'disclaimer'
   ) {
-    return normalizedHash;
+    return route;
   }
 
   return 'game';
@@ -94,6 +96,20 @@ function updateMetaDescription(description: string): void {
   descriptionTag.content = description;
 }
 
+function updateCanonicalLink(path: string): void {
+  let canonicalTag = document.querySelector<HTMLLinkElement>(
+    'link[rel="canonical"]'
+  );
+
+  if (!canonicalTag) {
+    canonicalTag = document.createElement('link');
+    canonicalTag.rel = 'canonical';
+    document.head.appendChild(canonicalTag);
+  }
+
+  canonicalTag.href = `${SITE_CONFIG.siteUrl}${path}`;
+}
+
 function App() {
   const [gameState, setGameState] = useState<GameState>(() =>
     buildInitialState('daily')
@@ -103,12 +119,12 @@ function App() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromHash());
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromUrl());
 
   /** Keep the app route in sync when the user uses browser back/forward. */
 useEffect(() => {
   const syncPageFromUrl = () => {
-    setCurrentPage(getPageFromHash());
+    setCurrentPage(getPageFromUrl());
     window.scrollTo({ top: 0 });
   };
 
@@ -126,6 +142,7 @@ useEffect(() => {
   const meta = pageMeta[currentPage];
   document.title = meta.title;
   updateMetaDescription(meta.description);
+  updateCanonicalLink(currentPage === 'game' ? '/' : `/${currentPage}`);
 }, [currentPage]);
 
 /** Navigate between the puzzle and static legal pages without adding a router dependency. */
@@ -139,7 +156,7 @@ const navigateToPage = useCallback((page: AppPage) => {
 
   const nextUrl =
     page === 'game'
-      ? `${window.location.pathname}${window.location.search}`
+      ? `/${window.location.search}`
       : `/${page}`;
 
   window.history.pushState(null, '', nextUrl);
